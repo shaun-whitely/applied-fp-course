@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
 module Level01.Core (runApp) where
 
+-- import           Data.Binary.Builder      (putStringUtf8)
 import           Network.Wai              (Application, Request, Response,
                                            ResponseReceived, responseLBS)
 import           Network.Wai.Handler.Warp (run)
@@ -32,8 +33,10 @@ app
   :: Request
   -> (Response -> IO ResponseReceived)
   -> IO ResponseReceived
-app _ cb =
-  error "Application not implemented"
+app _ cb = cb $ responseLBS status200 [] "Hello, world!"
+-- app _ cb = cb $ responseBuilder status200 [] response
+  -- where
+    -- response = putStringUtf8 "Hello, World!"
 
 -- We keep this main function here as it is useful to build your application as
 -- a library. The reasoning behind this is that when you come to do your
@@ -41,4 +44,4 @@ app _ cb =
 -- needing to worry about any initialisation code you've buried in your
 -- executable Main.hs.
 runApp :: IO ()
-runApp = run undefined undefined
+runApp = run 8080 app
