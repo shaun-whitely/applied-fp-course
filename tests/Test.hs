@@ -26,10 +26,12 @@ module Main where
 -- | 'tasty' takes care of managing all of our test cases, running them,
 -- checking results and then providing us with a report.
 import           Test.Tasty         (defaultMain, testGroup)
+import           Test.Tasty.HUnit   (assertEqual)
 
 -- | 'tasty-wai' makes it easier to create requests to submit to our
 -- application, and provides some helper functions for checking our assertions.
-import           Test.Tasty.Wai     (assertBody, assertStatus', get, post,
+import           Test.Tasty.Wai     (assertBody, assertBodyContains,
+                                     assertStatus', get, post,
                                      testWai)
 
 -- | For running unit tests for individual functions, we have included the
@@ -40,20 +42,41 @@ import           Test.Tasty.Wai     (assertBody, assertStatus', get, post,
 --
 
 import           Network.HTTP.Types as HTTP
+import           Network.Wai        (Application)
+import qualified Network.Wai        as Wai
 
 -- | This import is provided for you so you can check your work from Level02. As
 -- you move forward, come back and import your latest 'Application' so that you
 -- can test your work as you progress.
-import qualified Level02.Core       as Core
+import qualified Level04.Core       as Core
+import qualified Level04.DB         as DB
+import           Level04.Types      (Topic(..), CommentText(..))
+
+initTestDb :: IO DB.FirstAppDB
+initTestDb = do
+  errorOrDb <- DB.initDB ":memory:"
+  either (\_ -> fail "Could not initialise in-memory DB") (pure . id) errorOrDb
+
 
 main :: IO ()
-main = defaultMain $ testGroup "Applied FP Course - Tests"
+main = do
+  db <- initTestDb
+  let app = Core.app db
+  defaultMain $ testGroup "Applied FP Course - Tests"
+    [ testGroup "/list"
+      [ testWai app "lists topics" $ do
+        post "fudge/add" "is delicious"
+        post "cheese/add" "is tasty"
+        resp <- get "list"
+        assertStatus' HTTP.status200 resp
+        assertBodyContains "fudge" resp
+        assertBodyContains "cheese" resp
+      ]
 
-  [ testWai Core.app "List Topics" $
-      get "fudge/view" >>= assertStatus' HTTP.status200
-
-  , testWai Core.app "Empty Input" $ do
-      resp <- post "fudge/add" ""
-      assertStatus' HTTP.status400 resp
-      assertBody "Empty Comment Text" resp
-  ]
+    , testGroup "/add"
+      [ testWai app "with empty input reports error" $ do
+        resp <- post "fudge/add" ""
+        assertStatus' HTTP.status400 resp
+        assertBody "Empty Comment Text" resp
+      ]
+    ]
