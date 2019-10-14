@@ -10,6 +10,7 @@ module Level04.DB
   , deleteTopic
   ) where
 
+import           Data.Bifunctor                     (first)
 import           Data.Text                          (Text)
 import qualified Data.Text                          as Text
 
@@ -22,7 +23,7 @@ import qualified Database.SQLite.SimpleErrors       as Sql
 import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 
 import           Level04.Types                      (Comment, CommentText,
-                                                     Error, Topic, getTopic,
+                                                     Error(DBError), Topic, getTopic,
                                                      getCommentText,
                                                      fromDBComment, mkTopic)
 
@@ -63,6 +64,11 @@ initDB fp = Sql.runDBAction $ do
   -- extension is enabled.
     createTableQ = "CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, topic TEXT, comment TEXT, time TEXT)"
 
+runDB
+  :: IO a
+  -> IO (Either Error a)
+runDB a = first DBError <$> Sql.runDBAction a
+
 -- Note that we don't store the `Comment` in the DB, it is the type we build
 -- to send to the outside world. We will be loading our `DBComment` type from
 -- the FirstApp.DB.Types module before converting trying to convert it to a
@@ -85,8 +91,8 @@ getComments db topic =
   -- cannot be converted to a Comment, or simply ignoring any DBComment that is
   -- not valid.
   in do
-    comments <- Sql.query (dbConn db) sql (Sql.Only (getTopic topic))
-    pure $ traverse fromDBComment comments
+    errorOrComments <- runDB $ Sql.query (dbConn db) sql (Sql.Only (getTopic topic))
+    pure $ errorOrComments >>= traverse fromDBComment
 
 addCommentToTopic
   :: FirstAppDB
@@ -98,9 +104,10 @@ addCommentToTopic db topic commentText =
     sql = "INSERT INTO comments (topic,comment,time) VALUES (?,?,?)"
   in do
     now <- getCurrentTime
-    Sql.execute (dbConn db) sql (getTopic topic, getCommentText commentText, now)
-    pure $ Right () -- TODO: perhaps return an error or change type signature
-      
+    let rawTopic = getTopic topic
+    let rawComment = getCommentText commentText
+    res <- runDB $ Sql.execute (dbConn db) sql (rawTopic, rawComment, now)
+    pure $ const () <$> res
 
 getTopics
   :: FirstAppDB
@@ -109,8 +116,8 @@ getTopics db =
   let
     sql = "SELECT DISTINCT topic FROM comments"
   in do
-    topics <- Sql.query_ (dbConn db) sql
-    pure $ traverse (mkTopic . Sql.fromOnly) topics
+    errorOrTopics <- runDB $ Sql.query_ (dbConn db) sql
+    pure $ errorOrTopics >>= traverse (mkTopic . Sql.fromOnly)
 
 deleteTopic
   :: FirstAppDB
@@ -120,5 +127,4 @@ deleteTopic db topic =
   let
     sql = "DELETE FROM comments WHERE topic = ?"
   in
-    Right <$> Sql.execute (dbConn db) sql (Sql.Only (getTopic topic))
-    -- TODO: perhaps return an error or change type signature
+    runDB $ Sql.execute (dbConn db) sql (Sql.Only (getTopic topic))

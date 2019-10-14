@@ -38,7 +38,7 @@ import qualified Waargonaut.Encode                  as E
 import           Level04.Conf                       (Conf(..), firstAppConfig)
 import qualified Level04.DB                         as DB
 import           Level04.Types                      (ContentType (JSON, PlainText),
-                                                     Error (EmptyCommentText, EmptyTopic, UnknownRoute),
+                                                     Error (..),
                                                      RqType (AddRq, ListRq, ViewRq),
                                                      mkCommentText, mkTopic,
                                                      renderContentType, Comment, encodeComment, Topic,
@@ -56,7 +56,7 @@ runApp = do
   errorOrDb <- prepareAppReqs
   case errorOrDb of
     (Left e) -> print e
-    (Right db) -> run 3000 $ app db
+    (Right db) -> putStrLn "Listening on 3000" *> run 3000  (app db)
 
 -- We need to complete the following steps to prepare our app requirements:
 --
@@ -202,3 +202,5 @@ mkErrorResponse EmptyCommentText =
   resp400 PlainText "Empty Comment Text"
 mkErrorResponse EmptyTopic =
   resp400 PlainText "Empty Topic"
+mkErrorResponse (DBError _) =
+  resp500 PlainText "Internal Server Error"

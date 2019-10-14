@@ -52,7 +52,7 @@ import           Level04.Types.Topic        ( Topic
                                             , mkTopic
                                             )
 
-import           Level04.Types.Error        (Error (EmptyCommentText, EmptyTopic, UnknownRoute))
+import           Level04.Types.Error        (Error (EmptyCommentText, EmptyTopic, UnknownRoute, DBError))
 
 newtype CommentId = CommentId Int
   deriving (Eq, Show)
