@@ -21,6 +21,7 @@ import           Network.HTTP.Types                 (Status, hContentType,
 
 import qualified Data.ByteString.Lazy               as LBS
 
+import           Data.Bifunctor                     (first)
 import           Data.Either                        (either)
 import           Data.Monoid                        ((<>))
 
@@ -58,13 +59,13 @@ runApp = do
   case cfgE of
     Left err   ->
       -- We can't run our app at all! Display the message and exit the application.
-      undefined
+      print err
     Right cfg ->
       -- We have a valid config! We can now complete the various pieces needed to run our
       -- application. This function 'finally' will execute the first 'IO a', and then, even in the
       -- case of that value throwing an exception, execute the second 'IO b'. We do this to ensure
       -- that our DB connection will always be closed when the application finishes, or crashes.
-      Ex.finally (run undefined undefined) (DB.closeDB cfg)
+      Ex.finally (run 3000 (app cfg)) (DB.closeDB cfg)
 
 -- We need to complete the following steps to prepare our app requirements:
 --
@@ -75,8 +76,7 @@ runApp = do
 --
 prepareAppReqs
   :: IO ( Either StartUpError DB.FirstAppDB )
-prepareAppReqs =
-  error "copy your prepareAppReqs from the previous level."
+prepareAppReqs = first DBInitErr <$> DB.initDB (Conf.dbFilePath Conf.firstAppConfig)
 
 -- | Some helper functions to make our lives a little more DRY.
 mkResponse
@@ -130,8 +130,9 @@ resp200Json e =
 app
   :: DB.FirstAppDB
   -> Application
-app db rq cb =
-  error "app not reimplemented"
+app db rq cb = do
+  respE <- runAppM $ mkRequest rq >>= handleRequest db
+  cb $ either mkErrorResponse id respE
 
 handleRequest
   :: DB.FirstAppDB

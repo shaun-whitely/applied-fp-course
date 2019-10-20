@@ -48,9 +48,9 @@ import qualified Network.Wai        as Wai
 -- | This import is provided for you so you can check your work from Level02. As
 -- you move forward, come back and import your latest 'Application' so that you
 -- can test your work as you progress.
-import qualified Level04.Core       as Core
-import qualified Level04.DB         as DB
-import           Level04.Types      (Topic(..), CommentText(..))
+import qualified Level05.Core       as Core
+import qualified Level05.DB         as DB
+import           Level05.Types      (Topic(..), CommentText(..))
 
 initTestDb :: IO DB.FirstAppDB
 initTestDb = do
@@ -77,6 +77,6 @@ main = do
       [ testWai app "with empty input reports error" $ do
         resp <- post "fudge/add" ""
         assertStatus' HTTP.status400 resp
-        assertBody "Empty Comment Text" resp
+        assertBody "Empty Comment" resp
       ]
     ]
