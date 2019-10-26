@@ -27,6 +27,7 @@ module Level06.Types
   , renderContentType
   , confPortToWai
   , fromDBComment
+  , partialConfDecoder
   ) where
 
 import           GHC.Word                           (Word16)
@@ -155,6 +156,9 @@ newtype DBFilePath = DBFilePath
 -- - A customisable port number: ``Port``
 -- - A filepath for our SQLite database: ``DBFilePath``
 data Conf = Conf
+  { port :: Port
+  , dbFilePath :: DBFilePath
+  }
 
 -- We're storing our Port as a Word16 to be more precise and prevent invalid
 -- values from being used in our application. However Wai is not so stringent.
@@ -169,13 +173,15 @@ data Conf = Conf
 confPortToWai
   :: Conf
   -> Int
-confPortToWai =
-  error "confPortToWai not implemented"
+confPortToWai = fromIntegral . getPort . port
 
 -- Similar to when we were considering our application types. We can add to this sum type as we
 -- build our application and the compiler can help us out.
 data ConfigError
   = BadConfFile DecodeError
+  | FileReadError IOError
+  | MissingPort
+  | MissingDBFilePath
   deriving Show
 
 -- Our application will be able to load configuration from both a file and
@@ -211,9 +217,9 @@ data PartialConf = PartialConf
 -- to define a Semigroup instance. We define our ``(<>)`` function to lean
 -- on the ``Semigroup`` instance for Last to always get the last value.
 instance Semigroup PartialConf where
-  _a <> _b = PartialConf
-    { pcPort       = error "pcPort (<>) not implemented"
-    , pcDBFilePath = error "pcDBFilePath (<>) not implemented"
+  a <> b = PartialConf
+    { pcPort       = pcPort a <> pcPort b
+    , pcDBFilePath = pcDBFilePath a <> pcDBFilePath b
     }
 
 -- We now define our ``Monoid`` instance for ``PartialConf``. Allowing us to
@@ -232,7 +238,16 @@ instance Monoid PartialConf where
 -- library to handle the parsing and decoding for us. In order to do this, we
 -- have to tell waargonaut how to go about converting the JSON into our PartialConf
 -- data structure.
+portDecoder :: Monad f => Decoder f Port
+portDecoder = Port <$> D.integral
+
+dbFilePathDecoder :: Monad f => Decoder f DBFilePath
+dbFilePathDecoder =  DBFilePath <$> D.string
+
 partialConfDecoder :: Monad f => Decoder f PartialConf
-partialConfDecoder = error "PartialConf Decoder not implemented"
+partialConfDecoder =
+  PartialConf
+  <$> (Last <$> D.atKeyOptional "port" portDecoder)
+  <*> (Last <$> D.atKeyOptional "dbName" dbFilePathDecoder)
 
 -- Go to 'src/Level06/Conf/File.hs' next

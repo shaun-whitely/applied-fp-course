@@ -7,6 +7,7 @@ module Level06.Core
   ) where
 
 import qualified Control.Exception                  as Ex
+import           Control.Monad                      ((>=>))
 import           Control.Monad.IO.Class             (liftIO)
 
 import           Control.Monad.Except               (catchError, throwError)
@@ -40,10 +41,12 @@ import           Level06.AppM                       (App, AppM (..),
                                                      liftEither, runApp)
 import qualified Level06.Conf                       as Conf
 import qualified Level06.DB                         as DB
-import           Level06.Types                      (Conf, ConfigError,
+import           Level06.Types                      (Conf (..), ConfigError,
                                                      ContentType (..),
+                                                     DBFilePath (..),
                                                      Error (..),
                                                      RqType (AddRq, ListRq, ViewRq),
+                                                     confPortToWai,
                                                      encodeComment, encodeTopic,
                                                      mkCommentText, mkTopic,
                                                      renderContentType)
@@ -57,7 +60,13 @@ data StartUpError
   deriving Show
 
 runApplication :: IO ()
-runApplication = error "copy your previous 'runApp' implementation and refactor as needed"
+runApplication = do
+  cfgE <- runAppM prepareAppReqs
+  case cfgE of
+    Left err ->
+      print err
+    Right (cfg, db) ->
+      Ex.finally (run (confPortToWai cfg) (app cfg db)) (DB.closeDB db)
 
 -- | We need to complete the following steps to prepare our app requirements:
 --
@@ -72,7 +81,11 @@ runApplication = error "copy your previous 'runApp' implementation and refactor 
 -- up!
 --
 prepareAppReqs :: AppM StartUpError (Conf, DB.FirstAppDB)
-prepareAppReqs = error "copy your prepareAppReqs from the previous level."
+prepareAppReqs = do
+  config <- first ConfErr $ Conf.parseOptions "files/appconfig.json"
+  let dbE = first DBInitErr <$> DB.initDB (getDBFilePath (dbFilePath config))
+  db     <- liftIO >=> liftEither $ dbE
+  pure (config, db)
 
 -- | Some helper functions to make our lives a little more DRY.
 mkResponse

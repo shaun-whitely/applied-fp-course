@@ -49,39 +49,47 @@ runApp = runAppM
 
 instance Functor (AppM e) where
   fmap :: (a -> b) -> AppM e a -> AppM e b
-  fmap = error "fmap for (AppM e) not implemented"
+  fmap f (AppM s) = AppM $ fmap (fmap f) s
 
 instance Applicative (AppM e) where
   pure :: a -> AppM e a
-  pure  = error "pure for (AppM e) not implemented"
+  pure = AppM . pure . pure
 
   (<*>) :: AppM e (a -> b) -> AppM e a -> AppM e b
-  (<*>) = error "spaceship for (AppM e) not implemented"
+  (AppM f) <*> (AppM a) = AppM $ (<*>) <$> f <*> a
 
 instance Monad (AppM e) where
   return :: a -> AppM e a
-  return = error "return for (AppM e) not implemented"
+  return = pure
 
   (>>=) :: AppM e a -> (a -> AppM e b) -> AppM e b
-  (>>=)  = error "bind for (AppM e) not implemented"
+  (AppM a) >>= f = AppM $ do
+    ea <- a
+    let eb = f <$> ea
+    case eb of
+      (Right (AppM b)) -> b
+      (Left err) -> pure $ Left err
 
 instance MonadIO (AppM e) where
   liftIO :: IO a -> AppM e a
-  liftIO = error "liftIO for (AppM e) not implemented"
+  liftIO = AppM . (fmap pure)
 
 instance MonadError e (AppM e) where
   throwError :: e -> AppM e a
-  throwError = error "throwError for (AppM e) not implemented"
+  throwError = AppM . pure . Left
 
   catchError :: AppM e a -> (e -> AppM e a) -> AppM e a
-  catchError = error "catchError for (AppM e) not implemented"
+  catchError (AppM a) f = AppM $ do
+    e <- a
+    let (AppM b) = either f pure e
+    b
 
 -- The 'Bifunctor' instance for 'Either' has proved useful several times
 -- already. Now that our 'AppM' exposes both type variables that are used in our
 -- 'Either', we can define a Bifunctor instance and reap similar benefits.
 instance Bifunctor AppM where
   bimap :: (e -> d) -> (a -> b) -> AppM e a -> AppM d b
-  bimap = error "bimap for AppM not implemented"
+  bimap f g (AppM a) = AppM $ bimap f g <$> a
 
 -- This is a helper function that will `lift` an Either value into our new AppM
 -- by applying `throwError` to the Left value, and using `pure` to lift the
@@ -91,4 +99,4 @@ instance Bifunctor AppM where
 -- pure :: Applicative m => a -> m a
 --
 liftEither :: Either e a -> AppM e a
-liftEither = error "throwLeft not implemented"
+liftEither = AppM . pure
