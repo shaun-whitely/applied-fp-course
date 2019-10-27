@@ -48,23 +48,32 @@ import qualified Network.Wai        as Wai
 -- | This import is provided for you so you can check your work from Level02. As
 -- you move forward, come back and import your latest 'Application' so that you
 -- can test your work as you progress.
-import qualified Level06.Core       as Core
-import qualified Level06.DB         as DB
-import           Level06.Types      (Conf(..), Topic(..), CommentText(..), DBFilePath(..),
+import           Level07.AppM       (Env (..))
+import qualified Level07.Core       as Core
+import qualified Level07.DB         as DB
+import           Level07.Types      (Conf(..), Topic(..), CommentText(..), DBFilePath(..),
                                      Port(..))
 
 initTestDb :: IO DB.FirstAppDB
 initTestDb = do
-  errorOrDb <- DB.initDB ":memory:"
+  errorOrDb <- DB.initDB (DBFilePath ":memory:")
   either (\_ -> fail "Could not initialise in-memory DB") (pure . id) errorOrDb
 
 testConf :: Conf
 testConf = Conf (Port 3000) (DBFilePath ":memory:")
 
+testEnv :: DB.FirstAppDB -> Env
+testEnv db = Env
+  { envLoggingFn = const $ pure ()
+  , envConfig = testConf
+  , envDB = db
+  }
+
 main :: IO ()
 main = do
   db <- initTestDb
-  let app = Core.app testConf db
+  let env = testEnv db
+  let app = Core.app env
   defaultMain $ testGroup "Applied FP Course - Tests"
     [ testGroup "/list"
       [ testWai app "lists topics" $ do

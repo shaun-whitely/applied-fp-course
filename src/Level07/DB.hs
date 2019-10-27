@@ -9,6 +9,7 @@ module Level07.DB
   , deleteTopic
   ) where
 
+import           Control.Monad                      ((>=>))
 import           Control.Monad.IO.Class             (liftIO)
 import           Control.Monad.Reader               (asks)
 
@@ -25,7 +26,7 @@ import qualified Database.SQLite.Simple             as Sql
 import qualified Database.SQLite.SimpleErrors       as Sql
 import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 
-import           Level07.AppM                      (App, Env (envDB))
+import           Level07.AppM                      (App, Env (envDB), liftEither)
 
 import           Level07.Types                     (Comment, CommentText,
                                                      DBFilePath (getDBFilePath),
@@ -62,38 +63,54 @@ initDB fp = Sql.runDBAction $ do
 
 getDBConn
   :: App Connection
-getDBConn =
-  error "getDBConn not implemented"
+getDBConn = asks (dbConn . envDB)
 
 runDB
   :: (a -> Either Error b)
   -> (Connection -> IO a)
   -> App b
-runDB =
-  error "runDB not re-implemented"
+runDB aeb cioa = do
+  conn <- getDBConn
+  let ioea = first DBError <$> Sql.runDBAction (cioa conn)
+  a <- (liftIO >=> liftEither) ioea
+  liftEither $ aeb a
 
 getComments
   :: Topic
   -> App [Comment]
-getComments =
-  error "Copy your completed 'getComments' and refactor to match the new type signature"
+getComments topic =
+  let
+    q = "SELECT id,topic,comment,time FROM comments WHERE topic = ?"
+    params = Sql.Only (getTopic topic)
+  in
+    runDB (traverse fromDBComment) (\conn -> Sql.query conn q params)
 
 addCommentToTopic
   :: Topic
   -> CommentText
   -> App ()
-addCommentToTopic =
-  error "Copy your completed 'appCommentToTopic' and refactor to match the new type signature"
+addCommentToTopic topic comment = do
+  nowish <- liftIO getCurrentTime
+  let q = "INSERT INTO comments (topic,comment,time) VALUES (?,?,?)"
+  let params = (getTopic topic, getCommentText comment, nowish) 
+  runDB Right (\conn -> Sql.execute conn q params)
 
 getTopics
   :: App [Topic]
 getTopics =
-  error "Copy your completed 'getTopics' and refactor to match the new type signature"
+  let
+    q = "SELECT DISTINCT topic FROM comments"
+  in
+    runDB (traverse (mkTopic . Sql.fromOnly)) (\conn -> Sql.query_ conn q)
 
 deleteTopic
   :: Topic
   -> App ()
-deleteTopic =
-  error "Copy your completed 'deleteTopic' and refactor to match the new type signature"
+deleteTopic topic =
+  let
+    q = "DELETE FROM comments WHERE topic = ?"
+    params = Sql.Only (getTopic topic)
+  in
+    runDB Right (\conn -> Sql.execute conn q params)
 
 -- Go on to 'src/Level07/Core.hs' next.

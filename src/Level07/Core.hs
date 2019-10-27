@@ -39,7 +39,7 @@ import qualified Level07.Conf                       as Conf
 import qualified Level07.DB                         as DB
 
 import qualified Level07.Responses                  as Res
-import           Level07.Types                      (Conf, ConfigError,
+import           Level07.Types                      (Conf (..), ConfigError,
                                                      ContentType (PlainText),
                                                      Error (..), RqType (..),
                                                      confPortToWai,
@@ -83,9 +83,16 @@ runApplication = do
 -- 'mtl' on Hackage: https://hackage.haskell.org/package/mtl
 --
 prepareAppReqs :: ExceptT StartUpError IO Env
-prepareAppReqs = error "prepareAppReqs not reimplemented with ExceptT"
+prepareAppReqs = do
   -- You may copy your previous implementation of this function and try refactoring it. On the
   -- condition you have to explain to the person next to you what you've done and why it works.
+  conf <- ExceptT $ first ConfErr <$> Conf.parseOptions "files/appconfig.json"
+  db   <- ExceptT $ first DBInitErr <$> DB.initDB (dbFilePath conf)
+  pure $ Env 
+    { envLoggingFn = liftIO <$> hPutStrLn stderr
+    , envConfig = conf
+    , envDB = db
+    }
 
 -- | Now that our request handling and response creating functions operate
 -- within our App context, we need to run the App to get our IO action out
@@ -94,8 +101,13 @@ prepareAppReqs = error "prepareAppReqs not reimplemented with ExceptT"
 app
   :: Env
   -> Application
-app =
-  error "Copy your completed 'app' from the previous level and refactor it here"
+app env rq cb =
+  let
+    appResp = mkRequest rq >>= handleRequest
+    ioeresp = runApp appResp env
+    ioresp  = either mkErrorResponse id <$> ioeresp
+  in
+    cb =<< ioresp
 
 handleRequest
   :: RqType
